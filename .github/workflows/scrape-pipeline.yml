@@ -47,3 +47,12 @@ jobs:
       - name: Execute Rotation-Aware Domain Harvest Pipeline (Headed Mode via Xvfb)
         run: |
           xvfb-run --server-args="-screen 0 1920x1080x24" python scraper/scraper.py
+
+      - name: Upload Diagnostic Step-by-Step Screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scraper-diagnostic-screenshots
+          path: scraper/screenshots/
+          if-no-files-found: warn
+

@@ -63,7 +63,25 @@ class ExpiredDomainsSeleniumBaseScraper:
         Main execution loop. Uses SeleniumBase UC Mode to bypass anti-bot, 
         checks current session state, performs automatic login if session expired,
         and harvests expired domains respecting maximum constraints.
+        Captures dynamic step-by-step debug screenshots.
         """
+        # Create a directory to store the debug screenshots
+        screenshot_dir = "scraper/screenshots"
+        try:
+            os.makedirs(screenshot_dir, exist_ok=True)
+            logger.info(f"Target screenshots directory prepared at: {screenshot_dir}")
+        except Exception as dir_err:
+            logger.warning(f"Could not create screenshots directory: {dir_err}")
+
+        def save_debug_screenshot(sb, step_name: str):
+            try:
+                path = os.path.join(screenshot_dir, f"{step_name}.png")
+                sb.save_screenshot(path)
+                logger.info(f"Captured screenshot: '{path}'")
+                self.post_log("info", f"Captured diagnostic screenshot: {step_name}.png")
+            except Exception as ss_err:
+                logger.warning(f"Could not capture screenshot for phase {step_name}: {ss_err}")
+
         cred = self.fetch_primary_credentials()
         if not cred or cred["status"] == "disabled":
             self.post_log("error", "No active credentials available for authentication. Exiting.")
@@ -86,6 +104,7 @@ class ExpiredDomainsSeleniumBaseScraper:
                 with SB(uc=True, headless=False, browser="chrome") as sb:
                     # 1. Warm-up navigation using Undetectable Mode connection
                     sb.uc_open_with_reconnect("https://www.expireddomains.net/", reconnect_time=4)
+                    save_debug_screenshot(sb, "01_landing_page")
                     
                     # 2. Check if we have active cached cookies to inject
                     session_restored = False
@@ -98,6 +117,7 @@ class ExpiredDomainsSeleniumBaseScraper:
                             
                             # Reload to verify authenticated presence
                             sb.uc_open_with_reconnect("https://member.expireddomains.net/", reconnect_time=3)
+                            save_debug_screenshot(sb, "02_cookie_test_reload")
                             
                             # Inspect page to confirm authenticated state
                             if not sb.is_element_present("a[href='/login/']") and sb.is_text_visible("Log Out"):
@@ -119,6 +139,7 @@ class ExpiredDomainsSeleniumBaseScraper:
                         self.post_log("warning", "Old session expired/invalid. Bypassing login page protection...")
                         
                         sb.uc_open_with_reconnect("https://www.expireddomains.net/login/", reconnect_time=5)
+                        save_debug_screenshot(sb, "03_login_page_loaded")
                         
                         # Dynamically find the existing inputs
                         for sel in possible_usernames:
@@ -142,6 +163,7 @@ class ExpiredDomainsSeleniumBaseScraper:
                         sb.wait_for_element(username_selector, timeout=12)
                         sb.type(username_selector, username)
                         sb.type(password_selector, password)
+                        save_debug_screenshot(sb, "04_credentials_entered")
                         
                         # Click log in with human click emulation
                         self.post_log("info", "Credentials injected. Initiating login form execution...")
@@ -152,7 +174,8 @@ class ExpiredDomainsSeleniumBaseScraper:
                             submit_selector = "input[type='submit']"
 
                         sb.uc_click(submit_selector)
-                        time.sleep(4)
+                        time.sleep(5)
+                        save_debug_screenshot(sb, "05_after_login_click")
                         
                         # Verify we successfully logged in and are redirected to the user workspace
                         if sb.is_text_visible("Log Out") or "member.expireddomains" in sb.get_current_url():
@@ -164,6 +187,8 @@ class ExpiredDomainsSeleniumBaseScraper:
                             self.update_cached_session(cred["id"], fresh_cookies_json)
                             self.post_log("success", "Credentials accepted. Fresh browser session cookies cached in DB.")
                         else:
+                            # Let's see if we hit human validation screen / Cloudflare Turnstile
+                            save_debug_screenshot(sb, "05_login_failed_diagnostic")
                             raise WebDriverException("Credentials rejected or stuck on Turnstile/verification challenges.")
                     
                     # 4. Targetcombinedexpired Panel Scrape
@@ -171,6 +196,7 @@ class ExpiredDomainsSeleniumBaseScraper:
                     logger.info(f"Executing redirect navigation to Expired Combined Domains pane: {target_list_url}")
                     self.post_log("info", f"Navigating directly to Combined Expired panel: {target_list_url}")
                     sb.uc_open_with_reconnect(target_list_url, reconnect_time=3)
+                    save_debug_screenshot(sb, "06_combined_expired_panel")
                     
                     # 5. Harvest Domains with Maximum Limit Configuration
                     domains_list = []
@@ -216,6 +242,9 @@ class ExpiredDomainsSeleniumBaseScraper:
             except Exception as e:
                 logger.error(f"SeleniumBase execution fault: {e}")
                 self.post_log("error", f"SeleniumBase UC engine failed during handshake: {str(e)}")
+                # Capture terminal screenshot on failure to inspect error state
+                if 'sb' in locals():
+                    save_debug_screenshot(sb, "99_critical_exception_state")
         else:
             # High-fidelity mock simulator showcasing exact system logs to user in Web view
             logger.info("Beginning simulated SeleniumBase UC runner stack...")
