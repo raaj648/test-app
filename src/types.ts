@@ -1,9 +1,12 @@
-export interface CookieAccount {
+export interface CredentialAccount {
   id: string;
   account_name: string;
-  cookie_json: string;
+  email: string;
+  password: string;
+  session_cookies_json: string; // Stores the cached SeleniumBase browser cookies to reuse
   status: 'active' | 'expired' | 'failed' | 'disabled';
   is_primary: boolean;
+  last_login: string | null;
   last_success: string | null;
   last_failure: string | null;
   created_at: string;

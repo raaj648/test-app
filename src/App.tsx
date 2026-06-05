@@ -50,12 +50,12 @@ import {
   writeStoredData, 
   initializeDatabase,
   DEFAULT_DOMAINS,
-  DEFAULT_COOKIES,
+  DEFAULT_CREDENTIALS,
   DEFAULT_FILTERS,
   DEFAULT_LOGS,
   DEFAULT_SETTINGS
 } from './mockDb';
-import { CookieAccount, Filter, Domain, ScrapeLog } from './types';
+import { CredentialAccount, Filter, Domain, ScrapeLog } from './types';
 
 export default function App() {
   // Initialize default database state
@@ -66,7 +66,7 @@ export default function App() {
   // State
   const [activeTab, setActiveTab] = useState<'overview' | 'domains' | 'filters' | 'cookies' | 'logs' | 'settings'>('overview');
   const [domains, setDomains] = useState<Domain[]>(() => getStoredData('domains', DEFAULT_DOMAINS));
-  const [cookies, setCookies] = useState<CookieAccount[]>(() => getStoredData('cookies', DEFAULT_COOKIES));
+  const [credentials, setCredentials] = useState<CredentialAccount[]>(() => getStoredData('credentials', DEFAULT_CREDENTIALS));
   const [filters, setFilters] = useState<Filter[]>(() => getStoredData('filters', DEFAULT_FILTERS));
   const [logs, setLogs] = useState<ScrapeLog[]>(() => getStoredData('logs', DEFAULT_LOGS));
   
@@ -96,10 +96,12 @@ export default function App() {
   });
 
   // Create modes
-  const [isAddingCookie, setIsAddingCookie] = useState(false);
-  const [newCookie, setNewCookie] = useState({
+  const [isAddingCredential, setIsAddingCredential] = useState(false);
+  const [newCredential, setNewCredential] = useState({
     account_name: '',
-    cookie_json: '',
+    email: '',
+    password: '',
+    session_cookies_json: '',
     is_primary: false,
     status: 'active' as const
   });
@@ -128,8 +130,8 @@ export default function App() {
   }, [domains]);
 
   useEffect(() => {
-    writeStoredData('cookies', cookies);
-  }, [cookies]);
+    writeStoredData('credentials', credentials);
+  }, [credentials]);
 
   useEffect(() => {
     writeStoredData('filters', filters);
@@ -139,78 +141,112 @@ export default function App() {
     writeStoredData('logs', logs);
   }, [logs]);
 
-  // Handle Cookie action events
-  const handleCreateCookie = (e: React.FormEvent) => {
+  // Handle Credential and Active Session action events
+  const handleCreateCredential = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCookie.account_name || !newCookie.cookie_json) return;
+    if (!newCredential.account_name || !newCredential.email || !newCredential.password) return;
 
-    let finalCookies = [...cookies];
-    if (newCookie.is_primary) {
-      finalCookies = finalCookies.map(c => ({ ...c, is_primary: false }));
+    let finalCreds = [...credentials];
+    if (newCredential.is_primary) {
+      finalCreds = finalCreds.map(c => ({ ...c, is_primary: false }));
     }
 
-    const created: CookieAccount = {
-      id: `cook-${Date.now()}`,
-      account_name: newCookie.account_name,
-      cookie_json: newCookie.cookie_json,
-      status: newCookie.status,
-      is_primary: newCookie.is_primary,
+    const created: CredentialAccount = {
+      id: `cred-${Date.now()}`,
+      account_name: newCredential.account_name,
+      email: newCredential.email,
+      password: newCredential.password,
+      session_cookies_json: newCredential.session_cookies_json || '[]',
+      status: newCredential.status,
+      is_primary: newCredential.is_primary,
+      last_login: null,
       last_success: null,
       last_failure: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    setCookies([created, ...finalCookies]);
-    setIsAddingCookie(false);
-    setNewCookie({ account_name: '', cookie_json: '', is_primary: false, status: 'active' });
+    setCredentials([created, ...finalCreds]);
+    setIsAddingCredential(false);
+    setNewCredential({ account_name: '', email: '', password: '', session_cookies_json: '', is_primary: false, status: 'active' });
 
     // Append to logs
-    addLog('success', `Created cookie account: ${created.account_name}. Encryption handshake token ready.`);
+    addLog('success', `Added account credentials: ${created.account_name} (${created.email}). Ready for automated SeleniumBase login.`);
   };
 
-  const toggleCookieActive = (id: string) => {
-    setCookies(cookies.map(c => {
+  const toggleCredentialActive = (id: string) => {
+    setCredentials(credentials.map(c => {
       if (c.id === id) {
         const nextStatus = c.status === 'disabled' ? 'active' : 'disabled';
-        addLog('info', `Set cookie status [${c.account_name}] to "${nextStatus}"`);
+        addLog('info', `Set account status [${c.account_name}] to "${nextStatus}"`);
         return { ...c, status: nextStatus, updated_at: new Date().toISOString() };
       }
       return c;
     }));
   };
 
-  const deleteCookie = (id: string, name: string) => {
-    setCookies(cookies.filter(c => c.id !== id));
-    addLog('warning', `Deleted cookie account: [${name}] from the cluster.`);
+  const deleteCredential = (id: string, name: string) => {
+    setCredentials(credentials.filter(c => c.id !== id));
+    addLog('warning', `Deleted crawler credentials profile: [${name}] from rotation stack.`);
   };
 
-  const makeCookiePrimary = (id: string) => {
-    setCookies(cookies.map(c => ({
+  const makeCredentialPrimary = (id: string) => {
+    setCredentials(credentials.map(c => ({
       ...c,
       is_primary: c.id === id,
       updated_at: new Date().toISOString()
     })));
-    addLog('success', `Rotated primary scraping container node. Target set securely.`);
+    addLog('success', `Set [${credentials.find(c => c.id === id)?.account_name}] as the primary scraper nodes entry point.`);
   };
 
-  const testCookieHandshake = (id: string, name: string) => {
-    addLog('info', `Triggering requests validation webhook for target cookie [${name}]...`);
+  const testCredentialLoginState = (id: string, name: string) => {
+    addLog('info', `Testing live crawler handshake for [${name}] utilizing SeleniumBase UC...`);
+    
     setTimeout(() => {
-      setCookies(cookies.map(c => {
+      setCredentials(credentials.map(c => {
         if (c.id === id) {
-          const isSuccessful = Math.random() > 0.15; // 85% chance of success for mock
-          if (isSuccessful) {
-            addLog('success', `Handshake verified for ${name}! ExpiredDomains API responsive (HTTP 200).`);
-            return { ...c, status: 'active', last_success: new Date().toISOString(), updated_at: new Date().toISOString() };
+          const hasCookies = c.session_cookies_json && c.session_cookies_json !== '[]' && !c.session_cookies_json.includes('badcookie');
+          
+          if (hasCookies) {
+            // First attempt to reuse session cookies
+            addLog('success', `Validated active browser session via saved cookies. (HTTP 200). Ready for high concurrency.`);
+            return { 
+              ...c, 
+              status: 'active', 
+              last_success: new Date().toISOString(), 
+              updated_at: new Date().toISOString() 
+            };
           } else {
-            addLog('error', `Handshake verification failed for [${name}]. Received HTTP 403 Session Timeout.`);
-            return { ...c, status: 'failed', last_failure: new Date().toISOString(), updated_at: new Date().toISOString() };
+            // Redirected / Logged out detection triggers automatic login using email/password
+            addLog('warning', `Session cookies invalid or missing. Triggering SeleniumBase automatic relogin handler using credentials...`);
+            
+            // Simulating SeleniumBase auto-login delay
+            setTimeout(() => {
+              const freshCookiesMock = JSON.stringify([
+                { name: "xf_session", value: Math.random().toString(16).slice(2, 14), domain: ".expireddomains.net" }
+              ]);
+              setCredentials(prevCreds => prevCreds.map(item => {
+                if (item.id === id) {
+                  addLog('success', `Successfully authenticated via email/password. Saved fresh browser session cookies list back to DB.`);
+                  return {
+                    ...item,
+                    status: 'active',
+                    session_cookies_json: freshCookiesMock,
+                    last_login: new Date().toISOString(),
+                    last_success: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  };
+                }
+                return item;
+              }));
+            }, 1000);
+
+            return { ...c, status: 'active', updated_at: new Date().toISOString() };
           }
         }
         return c;
       }));
-    }, 800);
+    }, 600);
   };
 
   // Filter creation events
@@ -269,27 +305,51 @@ export default function App() {
   // Run Real-Time Daemon Simulation
   const triggerScraperLoop = () => {
     setIsScraping(true);
-    setScrapeProgress('Checking available session nodes...');
-    addLog('info', 'Manual workflow dispatch trigger received. Booting Playwright runner inside cloud runtime.');
+    setScrapeProgress('Checking available credential nodes...');
+    addLog('info', 'Manual workflow dispatch trigger received. Booting SeleniumBase (UC Mode) runner inside cloud runtime.');
 
     setTimeout(() => {
-      setScrapeProgress('Loading encrypted cookies from database...');
-      const activePrimary = cookies.find(c => c.is_primary && c.status === 'active');
-      const fallbackCookie = cookies.find(c => !c.is_primary && c.status === 'active');
-      const targetCookie = activePrimary || fallbackCookie;
+      setScrapeProgress('Loading active credentials from database...');
+      const activePrimary = credentials.find(c => c.is_primary && c.status === 'active');
+      const fallbackCred = credentials.find(c => !c.is_primary && c.status === 'active');
+      const targetCred = activePrimary || fallbackCred;
 
-      if (!targetCookie) {
-        addLog('error', 'Scraper terminated: No active verified cookie nodes available for handshake.');
+      if (!targetCred) {
+        addLog('error', 'Scraper terminated: No active verified account credentials available for login.');
         setIsScraping(false);
         return;
       }
 
-      setTimeout(() => {
-        setScrapeProgress(`Injecting sessions: ${targetCookie.account_name}`);
-        addLog('info', `Playwright authenticated as ExpiredDomains user session [${targetCookie.account_name}].`);
+      const hasSession = targetCred.session_cookies_json && targetCred.session_cookies_json !== '[]';
 
+      if (hasSession) {
+        setScrapeProgress(`Restoring session for: ${targetCred.account_name}`);
+        addLog('info', `SeleniumBase successfully restored cached browser session for [${targetCred.email}]. Bypassed login form.`);
+      } else {
+        setScrapeProgress(`Auto-logging into ExpiredDomains: ${targetCred.email}`);
+        addLog('warning', `No active browser session detected for [${targetCred.email}]. Booting Undetectable UC browser & submitting form...`);
+      }
+
+      setTimeout(() => {
+        if (!hasSession) {
+          addLog('success', `SeleniumBase auto-login successful. Saved fresh browser cookies state back to DB for: ${targetCred.email}`);
+          // Update credentials with mock cookies for subsequent runs
+          setCredentials(prev => prev.map(c => {
+            if (c.id === targetCred.id) {
+              return {
+                ...c,
+                session_cookies_json: '[{"name":"xf_session","value":"session_generated_via_seleniumbase","domain":".expireddomains.net"}]',
+                last_login: new Date().toISOString()
+              };
+            }
+            return c;
+          }));
+        }
+
+        setScrapeProgress('Executing filters on ExpiredDomains search endpoints...');
+        
         setTimeout(() => {
-          setScrapeProgress('Executing filters on search endpoints...');
+          setScrapeProgress('Gathering available domain lists...');
           
           // Generate 3 fresh elegant domains
           const premiumPrefixes = ['zen', 'nexus', 'cyber', 'quantum', 'meta', 'optic', 'apex'];
@@ -373,7 +433,7 @@ export default function App() {
   const cleanDomainsCount = domains.filter(d => d.clean_history).length;
   const riskyDomainsCount = domains.filter(d => d.has_adult_history || d.has_casino_history).length;
 
-  const activeCookieNodes = cookies.filter(c => c.status === 'active').length;
+  const activeCredentialNodes = credentials.filter(c => c.status === 'active').length;
   const successRate = totalDomainsCount > 0 ? '98.5%' : '0%';
 
   // Dynamic filter lists
@@ -522,13 +582,13 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4" />
-                  <span>Cookie Cluster</span>
+                  <User className="w-4 h-4" />
+                  <span>Credential Cluster</span>
                 </div>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  activeCookieNodes > 0 ? 'bg-emerald-950 text-emerald-400 border-emerald-900' : 'bg-red-950 text-red-400 border-red-900'
+                  activeCredentialNodes > 0 ? 'bg-emerald-950 text-emerald-400 border-emerald-900' : 'bg-red-950 text-red-400 border-red-900'
                 }`}>
-                  {activeCookieNodes}
+                  {activeCredentialNodes}
                 </span>
               </button>
             </div>
@@ -607,13 +667,13 @@ export default function App() {
                 <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl shadow-md space-y-2">
                   <div className="flex items-center justify-between text-gray-400">
                     <span className="text-xs font-medium">Session Cluster State</span>
-                    <Key className="w-4.5 h-4.5 text-indigo-500" />
+                    <User className="w-4.5 h-4.5 text-indigo-500" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-white">{activeCookieNodes}</span>
-                    <span className="text-[11px] text-gray-400">of {cookies.length}</span>
+                    <span className="text-2xl font-bold text-white">{activeCredentialNodes}</span>
+                    <span className="text-[11px] text-gray-400">of {credentials.length}</span>
                   </div>
-                  <p className="text-[10px] text-gray-500">Validated rotatable proxy cookies</p>
+                  <p className="text-[10px] text-gray-500">Validated rotatable client accounts</p>
                 </div>
 
                 <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl shadow-md space-y-2">
@@ -721,7 +781,7 @@ export default function App() {
                     <div>
                       <h4 className="text-xs font-semibold text-[#818cf8]">Intelligent Crawler</h4>
                       <p className="text-[10px] text-gray-400">
-                        Cookie health rating sits at <span className="text-emerald-400 font-bold">100% active</span>. Handshakes are rotated via Cron scheduler securely.
+                        Credential status health sits at <span className="text-emerald-400 font-bold">100% active</span>. Handshakes are rotated via Cron scheduler securely.
                       </p>
                     </div>
                   </div>
@@ -1180,192 +1240,276 @@ export default function App() {
             </div>
           )}
 
-          {/* Cookie Cluster Management Pane */}
+          {/* Credentials & Dynamic Session Cluster Pane */}
           {activeTab === 'cookies' && (
             <div className="space-y-6">
               
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Key className="w-5 h-5 text-indigo-500" />
-                    <span>Cookie Cluster & Rotator Deck</span>
+                    <User className="w-5 h-5 text-indigo-400" />
+                    <span>ExpiredDomains Credential Deck & Session Rotator</span>
                   </h2>
-                  <p className="text-xs text-gray-400">Stores multiple authenticated sessions. If node A fails, crawler rotates seamlessly to B.</p>
+                  <p className="text-xs text-gray-400">Manage Email & Password accounts. SeleniumBase UC Mode auto-authenticates, caches active browser cookies, and repairs sessions instantly upon logout.</p>
                 </div>
                 
                 <button
-                  onClick={() => setIsAddingCookie(!isAddingCookie)}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-lg transition-all"
+                  onClick={() => setIsAddingCredential(!isAddingCredential)}
+                  className="flex items-center gap-1.5 self-start sm:self-auto bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-lg hover:shadow-blue-900/30 active:scale-95 shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Import Cookie Session</span>
+                  <Plus className="w-4 h-4" />
+                  <span>Register Crawler Account</span>
                 </button>
               </div>
 
-              {/* Add Cookie Widget */}
-              {isAddingCookie && (
-                <form onSubmit={handleCreateCookie} className="bg-[#0b1329] border border-[#1e294b] rounded-xl p-5 text-left space-y-4">
-                  <h3 className="text-sm font-bold text-white">Import ExpiredDomains API Session String</h3>
+              {/* Add Account Credentials Widget */}
+              {isAddingCredential && (
+                <form onSubmit={handleCreateCredential} className="bg-[#0b1329] border border-[#1e294b] rounded-xl p-5 text-left space-y-4 shadow-lg animate-fade-in text-xs">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <Plus className="w-4 h-4 text-emerald-400" />
+                    <span>Register New ExpiredDomains.net Login Node</span>
+                  </h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[11px] text-gray-400 font-bold block">Account Label / Identifier</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Account Label / Friendly Name</label>
                       <input 
                         required
                         type="text"
-                        placeholder="e.g. Scraper Alpha Proxy"
-                        value={newCookie.account_name}
-                        onChange={(e) => setNewCookie({ ...newCookie, account_name: e.target.value })}
-                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full"
+                        placeholder="e.g. Crawler Beta Node"
+                        value={newCredential.account_name}
+                        onChange={(e) => setNewCredential({ ...newCredential, account_name: e.target.value })}
+                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full transition-colors"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[11px] text-gray-400 font-bold block">Setup Mode</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Login Email Address</label>
+                      <input 
+                        required
+                        type="email"
+                        placeholder="e.g. user@expireddomains.net"
+                        value={newCredential.email}
+                        onChange={(e) => setNewCredential({ ...newCredential, email: e.target.value })}
+                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full transition-colors"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Credential Password</label>
+                      <input 
+                        required
+                        type="password"
+                        placeholder="••••••••••••"
+                        value={newCredential.password}
+                        onChange={(e) => setNewCredential({ ...newCredential, password: e.target.value })}
+                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Optional Pre-Cached Cookies Array (JSON Format)</label>
+                      <textarea 
+                        rows={2}
+                        placeholder='[{"name": "xf_session", "value": "xxxx", "domain": ".expireddomains.net"}]'
+                        value={newCredential.session_cookies_json}
+                        onChange={(e) => setNewCredential({ ...newCredential, session_cookies_json: e.target.value })}
+                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg p-3 text-xs text-white font-mono focus:outline-none focus:border-blue-500 w-full placeholder:text-gray-600 transition-colors"
+                      />
+                      <span className="text-[9px] text-gray-500">Leave empty to leverage SeleniumBase automated login on first invocation.</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Initial Runner Status</label>
                       <select 
-                        value={newCookie.status}
-                        onChange={(e) => setNewCookie({ ...newCookie, status: e.target.value as any })}
-                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full"
+                        value={newCredential.status}
+                        onChange={(e) => setNewCredential({ ...newCredential, status: e.target.value as any })}
+                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full transition-colors"
                       >
-                        <option value="active">Active Crawler Pool</option>
-                        <option value="disabled">Disabled State</option>
+                        <option value="active">Active (Eligible for Rotation)</option>
+                        <option value="disabled">Disabled (Do Not Invoke)</option>
                       </select>
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px]/normal text-gray-400 font-bold block">
-                      Cookie JSON Array (Extracted from Developer Console cookie `xf_session`)
-                    </label>
-                    <textarea 
-                      required
-                      rows={3}
-                      placeholder='[{"name": "xf_session", "value": "xxxx", "domain": ".expireddomains.net"}]'
-                      value={newCookie.cookie_json}
-                      onChange={(e) => setNewCookie({ ...newCookie, cookie_json: e.target.value })}
-                      className="bg-[#0f172a] border border-[#1e294b] rounded-lg p-3 text-xs text-white font-mono focus:outline-none focus:border-blue-500 w-full placeholder:text-gray-600"
-                    />
-                  </div>
-
                   <div className="flex justify-between items-center pt-2">
-                    <label className="flex items-center gap-2 text-xs text-gray-300 select-none">
+                    <label className="flex items-center gap-2 text-xs text-gray-300 select-none cursor-pointer">
                       <input 
                         type="checkbox"
-                        checked={newCookie.is_primary}
-                        onChange={(e) => setNewCookie({ ...newCookie, is_primary: e.target.checked })}
-                        className="w-4 h-4 rounded text-blue-600 bg-gray-900 border-gray-800"
+                        checked={newCredential.is_primary}
+                        onChange={(e) => setNewCredential({ ...newCredential, is_primary: e.target.checked })}
+                        className="w-4 h-4 rounded text-blue-600 bg-[#0f172a] border-gray-800 focus:ring-0 cursor-pointer"
                       />
-                      <span>Set as primary cluster node</span>
+                      <span>Set as primary scraping client node</span>
                     </label>
 
                     <div className="flex gap-3">
                       <button 
                         type="button" 
-                        onClick={() => setIsAddingCookie(false)}
-                        className="bg-transparent border border-[#1e294b] text-gray-400 hover:text-white text-xs px-4 py-2 rounded-lg"
+                        onClick={() => setIsAddingCredential(false)}
+                        className="bg-transparent border border-[#1e294b] hover:border-slate-600 text-gray-400 hover:text-white text-xs px-4 py-2 rounded-xl transition-colors"
                       >
                         Cancel
                       </button>
                       <button 
                         type="submit"
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg"
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-lg hover:shadow-blue-900/35 transition-all"
                       >
-                        Encrypt & Save String
+                        Save Account Parameters
                       </button>
                     </div>
                   </div>
                 </form>
               )}
 
-              {/* Database cookie list */}
+              {/* Database credentials list */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {cookies.map((cook) => (
-                  <div key={cook.id} className="bg-[#0b1329] border border-[#1e294b] rounded-xl p-5 text-left flex flex-col justify-between space-y-4 shadow">
-                    
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-white line-clamp-1">{cook.account_name}</h4>
-                          {cook.is_primary && (
-                            <span className="bg-blue-950 text-[10px] text-blue-400 border border-blue-900 px-2 py-0.5 rounded-full font-bold">
-                              Primary Node
+                {credentials.map((cred) => {
+                  const hasActiveCookies = cred.session_cookies_json && cred.session_cookies_json !== '[]';
+                  return (
+                    <div key={cred.id} className="bg-[#0b1329] border border-[#1e294b] rounded-xl p-5 text-left flex flex-col justify-between space-y-4 shadow hover:border-indigo-500/30 transition-all">
+                      
+                      <div>
+                        {/* Header Row */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-white line-clamp-1">{cred.account_name}</h4>
+                            {cred.is_primary && (
+                              <span className="bg-indigo-950/50 text-[10px] text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded-full font-semibold">
+                                Primary Client Node
+                              </span>
+                            )}
+                          </div>
+                          
+                          <span className={`px-2 py-0.5 text-[9px] font-bold rounded uppercase ${
+                            cred.status === 'active' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' :
+                            cred.status === 'expired' ? 'bg-amber-950 text-amber-500 border border-amber-900' :
+                            cred.status === 'failed' ? 'bg-red-950 text-red-500 border border-red-900' : 'bg-gray-950 text-gray-500 border border-gray-800'
+                          }`}>
+                            {cred.status}
+                          </span>
+                        </div>
+
+                        {/* Connection Details Block */}
+                        <div className="bg-[#0e162d] border border-[#1e294b]/60 rounded-xl p-3.5 mt-3 space-y-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-gray-400 font-medium">Mapped User</span>
+                            <span className="font-mono text-gray-100 font-bold">{cred.email}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-gray-400 font-medium">Password Hash</span>
+                            <span className="font-mono text-gray-500 tracking-widest font-bold">••••••••••••</span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-gray-400 font-medium">Session Cache Status</span>
+                            <span className={`font-bold flex items-center gap-1 ${hasActiveCookies ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${hasActiveCookies ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                              {hasActiveCookies ? 'Active Cookies Session Reusable' : 'Empty Cache - Delayed Login Flagged'}
                             </span>
-                          )}
+                          </div>
                         </div>
-                        
-                        <span className={`px-2 py-0.5 text-[9px] font-bold rounded uppercase ${
-                          cook.status === 'active' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' :
-                          cook.status === 'expired' ? 'bg-amber-950 text-amber-500 border border-amber-900' :
-                          cook.status === 'failed' ? 'bg-red-950 text-red-500 border border-red-900' : 'bg-gray-950 text-gray-500 border border-gray-800'
-                        }`}>
-                          {cook.status}
+
+                        {/* Collapsed/Visual cookies JSON serialization preview */}
+                        <div className="mt-3.5 bg-[#070d1e] rounded-lg p-3 border border-[#1c2642] relative overflow-hidden">
+                          <div className="flex items-center justify-between mb-1 text-[10px] uppercase font-bold tracking-wider text-gray-400">
+                            <span>Dynamic Session Cookies</span>
+                            <span className="text-gray-500 font-mono text-[9px]">{hasActiveCookies ? 'Cached via SeleniumBase UC' : 'No stored session coordinates'}</span>
+                          </div>
+                          <p className="text-[10.5px] font-mono text-indigo-300 break-all line-clamp-1 bg-[#101936] p-1.5 rounded border border-[#1d2a52]">
+                            {cred.session_cookies_json || '[]'}
+                          </p>
+                        </div>
+
+                        {/* Verification Metrics and timings */}
+                        <div className="grid grid-cols-3 gap-2 mt-4 text-[11px] border-t border-[#1e294b]/60 pt-3">
+                          <div>
+                            <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider mb-1">Last Full Login</span>
+                            <span className="font-mono text-gray-300 font-semibold">{cred.last_login ? cred.last_login.slice(11, 19) : 'No Password Login'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider mb-1">Last Scrape Sync</span>
+                            <span className="font-mono text-gray-300 font-semibold">{cred.last_success ? cred.last_success.slice(11, 19) : 'None'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 font-bold block text-[9px] uppercase tracking-wider mb-1">Authentication Error</span>
+                            <span className="font-mono text-gray-300 font-semibold">{cred.last_failure ? cred.last_failure.slice(11, 19) : 'None'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Operations Footer */}
+                      <div className="border-t border-[#1e294b] pt-4 mt-2 flex flex-wrap items-center justify-between gap-3">
+                        <span className="text-[10px] text-gray-500 font-mono">
+                          Saved: {cred.created_at.slice(0, 10)}
                         </span>
-                      </div>
 
-                      <div className="mt-4 bg-[#0f172a] rounded-lg p-3 border border-[#1e294b] relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[10px] uppercase font-bold text-gray-500">Encrypted Token String</span>
-                          <Lock className="w-3.5 h-3.5 text-gray-500" />
-                        </div>
-                        <p className="text-[11px] font-mono text-gray-300 break-all line-clamp-1">
-                          {cook.cookie_json}
-                        </p>
-                      </div>
-
-                      {/* Diagnostic history */}
-                      <div className="grid grid-cols-2 gap-3 mt-4 text-[11px] border-t border-[#1e294b]/60 pt-3">
-                        <div>
-                          <span className="text-gray-500 block">Last Handshake Success</span>
-                          <span className="font-mono text-gray-300">{cook.last_success ? cook.last_success.slice(11, 19) : 'None Recorded'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 block">Last Verification Fault</span>
-                          <span className="font-mono text-gray-300">{cook.last_failure ? cook.last_failure.slice(11, 19) : 'None'}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[#1e294b] pt-4 flex flex-wrap items-center justify-between gap-2.5">
-                      <span className="text-[10px] text-gray-500 font-mono">
-                        Imported: {cook.created_at.slice(0, 10)}
-                      </span>
-
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <button
-                          onClick={() => testCookieHandshake(cook.id, cook.account_name)}
-                          className="px-2.5 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-400 rounded text-[11px] font-bold border border-blue-900 transition-all"
-                        >
-                          Test Validity
-                        </button>
-                        
-                        {!cook.is_primary && cook.status === 'active' && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <button
-                            onClick={() => makeCookiePrimary(cook.id)}
-                            className="px-2.5 py-1.5 bg-[#1e294b] hover:bg-slate-800 text-gray-300 rounded text-[11px] font-bold transition-all"
+                            onClick={() => testCredentialLoginState(cred.id, cred.account_name)}
+                            className="px-3 py-1.5 bg-blue-950/80 hover:bg-blue-900 border border-blue-900 hover:border-blue-700 text-blue-400 hover:text-blue-300 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 active:scale-95"
                           >
-                            Set Primary
+                            <RotateCw className="w-3 h-3 text-blue-400 shrink-0" />
+                            <span>Test & Hydrate Session</span>
                           </button>
-                        )}
+                          
+                          {!cred.is_primary && cred.status === 'active' && (
+                            <button
+                              onClick={() => makeCredentialPrimary(cred.id)}
+                              className="px-3 py-1.5 bg-[#1b2542] hover:bg-slate-800 text-gray-300 rounded-lg text-[11px] font-bold transition-all"
+                            >
+                              Set Primary
+                            </button>
+                          )}
 
-                        <button
-                          onClick={() => toggleCookieActive(cook.id)}
-                          className="px-2.5 py-1.5 bg-[#0f172a] border border-[#1e294b] hover:border-slate-600 text-gray-400 rounded text-[11px] transition-all"
-                        >
-                          {cook.status === 'disabled' ? 'Enable' : 'Disable'}
-                        </button>
+                          <button
+                            onClick={() => toggleCredentialActive(cred.id)}
+                            className="px-3 py-1.5 bg-[#0f172a] border border-[#1e294b] hover:border-slate-600 text-gray-400 rounded-lg text-[11px] transition-all"
+                          >
+                            {cred.status === 'disabled' ? 'Enable' : 'Disable'}
+                          </button>
 
-                        <button 
-                          onClick={() => deleteCookie(cook.id, cook.account_name)}
-                          className="p-1.5 text-red-400 hover:bg-red-950/20 rounded transition-all"
-                          title="Remove cookie from cluster"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <button 
+                            onClick={() => deleteCredential(cred.id, cred.account_name)}
+                            className="p-1.5 text-red-400 hover:bg-red-950/20 hover:text-red-300 rounded-lg transition-all"
+                            title="Remove credentials from cluster"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
 
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Advanced SeleniumBase UC Architecture Guide */}
+              <div className="bg-[#0b1329]/80 border border-[#1e294b] p-5 rounded-xl text-left space-y-3 shadow">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5 uppercase tracking-wider text-indigo-400">
+                  <Shield className="w-4 h-4 text-indigo-400" />
+                  <span>Interactive SeleniumBase Undetectable Bypass Guide</span>
+                </h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  SeleniumBase UC Mode (Undetectable Mode) provides advanced kernel-level spoofing to safely bypass Cloudflare, recaptchas, and strict user-agent challenge-checks. The SaaS daemon runs using the following optimized paradigm:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1.5 text-xs">
+                  <div className="bg-[#0f172a] border border-[#1e294b] p-3 rounded-lg space-y-1">
+                    <span className="font-bold text-gray-200 block">1. Cache Strategy First</span>
+                    <span className="text-gray-400 block text-[11px] leading-normal">The client daemon loads session cookies from database tables first. By attaching the active session tokens instantly, we bypass the complete login form payload, saving resources.</span>
                   </div>
-                ))}
+                  <div className="bg-[#0f172a] border border-[#1e294b] p-3 rounded-lg space-y-1">
+                    <span className="font-bold text-gray-200 block">2. Auto-Login Recovery</span>
+                    <span className="text-gray-400 block text-[11px] leading-normal">If ExpiredDomains returns a guest login screen (HTTP 403 / redirect to guest page), the loop intercepts the logout condition, spawns Undetectable Chrome, types the credentials, and captures the fresh tokens.</span>
+                  </div>
+                  <div className="bg-[#0f172a] border border-[#1e294b] p-3 rounded-lg space-y-1">
+                    <span className="font-bold text-gray-200 block">3. Cloudflare turnstile UC</span>
+                    <span className="text-gray-400 block text-[11px] leading-normal">Utilizes specific SeleniumBase UC calls like <code className="text-blue-400 text-[10px] font-mono">sb.uc_open_with_reconnect()</code> and <code className="text-blue-400 text-[10px] font-mono">sb.uc_click()</code> to interact organically with elements, evading automated heuristics.</span>
+                  </div>
+                </div>
               </div>
 
             </div>
@@ -1540,73 +1684,111 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Cron Triggers Configuration */}
-                  <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl space-y-4 text-left shadow-lg flex flex-col justify-between">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 font-bold text-purple-400 text-sm">
-                        <Clock className="w-4.5 h-4.5" />
-                        <span>SaaS Daemon Webhooks & Crons</span>
-                      </div>
-                      <p className="text-xs text-gray-400 leading-normal">
-                        Configure webhook endpoints mapping. Use scheduled ping channels (e.g. cron-jobs.org) to ping your trigger path at recurring intervals.
-                      </p>
+                </div>
 
-                      <div className="space-y-3.5 text-xs">
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Webhook Ingress URL</label>
-                          <input 
-                            type="url" 
-                            required
-                            value={settings.webhook_url}
-                            onChange={(e) => setSettings({ ...settings, webhook_url: e.target.value })}
-                            placeholder="https://your-cloudrun-url.com/api/dispatch-cron"
-                            className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full font-mono transition-colors"
-                          />
+                {/* cron-jobs.org Step-By-Step Configuration Matrix */}
+                <div className="bg-[#0b1329] border border-blue-900/60 p-5 rounded-xl space-y-4 text-left shadow-lg">
+                  <div className="flex items-center gap-2 font-bold text-blue-400 text-sm">
+                    <Sparkles className="w-4.5 h-4.5 text-blue-500 animate-pulse" />
+                    <span>How to set up Free Cron Jobs on Cron-Jobs.org</span>
+                  </div>
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    You can schedule automated scraping runs using a free cron job service. <strong>Cron-Jobs.org</strong> is a highly reliable service that offers a 100% free tier supporting high-frequency execution pings.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs pt-1.5">
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-blue-950 border border-blue-800 text-blue-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                        <div>
+                          <span className="font-bold text-gray-100 block">Create your Free Account</span>
+                          <span className="text-gray-400 text-[11px] leading-normal">
+                            Sign up at <a href="https://cron-jobs.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">cron-jobs.org</a>. The free tier gives you up to 15 cron jobs with a frequency of up to once per minute — perfect for this workspace!
+                          </span>
                         </div>
+                      </div>
 
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center">
-                            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Cron Authorization Header Code</label>
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-blue-950 border border-blue-800 text-blue-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                        <div>
+                          <span className="font-bold text-gray-100 block">Set Target Webhook Address</span>
+                          <span className="text-gray-400 text-[11px] leading-normal">
+                            Create a new Cron Job on their dashboard and input the following endpoint URL:
+                          </span>
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <input 
+                              readOnly
+                              type="text" 
+                              value={settings.webhook_url}
+                              className="bg-[#101936] text-[10px] font-mono text-gray-300 p-1 rounded border border-[#1e294b] w-full focus:outline-none"
+                            />
                             <button
                               type="button"
-                              onClick={generateNewCronSecret}
-                              className="text-[10px] text-purple-400 hover:underline font-bold"
+                              onClick={() => {
+                                navigator.clipboard.writeText(settings.webhook_url);
+                                addLog('success', 'Webhook Ingress URL copied to clipboard.');
+                              }}
+                              className="bg-indigo-950 text-indigo-400 text-[10px] font-bold px-2 py-1 rounded border border-indigo-900 hover:bg-slate-800"
                             >
-                              Rotate Signature Key
+                              Copy
                             </button>
                           </div>
-                          <input 
-                            type="text" 
-                            required
-                            value={settings.cron_secret}
-                            onChange={(e) => setSettings({ ...settings, cron_secret: e.target.value })}
-                            placeholder="CRON_SEC_XXXXXXXXXXXXXXXXXXXX"
-                            className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-purple-300 font-mono focus:outline-none focus:border-blue-500 w-full transition-colors"
-                          />
                         </div>
                       </div>
                     </div>
 
-                    <div className="bg-[#1a1c3c] border border-[#312e81] p-3 rounded-lg text-[11px] text-gray-300 leading-normal mt-4">
-                      <div className="flex gap-2">
-                        <Lock className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                        <span>
-                          <strong>Security Mandate:</strong> Inbound scheduler requests must payload present the active authorization code header mapped above. Unauthenticated requests are discarded automatically.
-                        </span>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-blue-950 border border-blue-800 text-blue-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                        <div>
+                          <span className="font-bold text-gray-100 block">Inject Secure Authentication Header</span>
+                          <span className="text-gray-400 text-[11px] leading-normal">
+                            ExpiredDomains scraper checks custom headers to prevent unauthorized runs. Under the "Headers" tab in Cron-Jobs.org, enter:
+                          </span>
+                          <div className="mt-1.5 space-y-1 bg-[#101936] p-2 rounded border border-[#1e294b]">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="text-gray-400 font-bold">Header Key:</span>
+                              <span className="font-mono text-blue-400">X-Cron-Authorization</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] gap-2">
+                              <span className="text-gray-400 font-bold shrink-0">Header Value:</span>
+                              <span className="font-mono text-indigo-300 truncate">{settings.cron_secret}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(settings.cron_secret);
+                              addLog('success', 'Cron authorization token copied to clipboard.');
+                            }}
+                            className="mt-1.5 bg-indigo-950 text-indigo-400 text-[10px] font-bold px-2 py-1 rounded border border-indigo-900 hover:bg-slate-800 w-full text-center"
+                          >
+                            Copy Authentication Key
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-5 h-5 rounded-full bg-blue-950 border border-blue-800 text-blue-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">4</span>
+                        <div>
+                          <span className="font-bold text-gray-100 block">Set Timing Schedule</span>
+                          <span className="text-gray-400 text-[11px] leading-normal">
+                            Select "Regular intervals" and set execution frequency to e.g., <strong>Every 5 minutes</strong> or once per hour depending on list speed wishes. Save to activate automated background imports.
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-
                 </div>
 
-                {/* Advanced Playwright & Cookie Rotator Custom Options */}
+                {/* Advanced SeleniumBase & Cookie Rotator Custom Options */}
                 <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl space-y-4 text-left shadow-lg">
                   <div className="flex items-center gap-2 font-bold text-gray-300 text-sm">
                     <Settings className="w-4.5 h-4.5 text-blue-500" />
-                    <span>Advanced Page Sandbox & Rotating Cookie Policies</span>
+                    <span>Advanced SeleniumBase & Cookie Rotator Custom Options</span>
                   </div>
                   <p className="text-xs text-gray-400">
-                    Fine-tune Playwright automation variables, cookie swap structures, and scrape behaviors to protect session keys and bypass CAPTCHAs.
+                    Fine-tune SeleniumBase UC (Undetectable Mode) variables, cookie swap structures, and scrape behaviors to protect session keys and bypass CAPTCHAs.
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs pt-2">

@@ -1,6 +1,6 @@
 // Simple in-memory mock database with client persistence simulation
 // so the dashboard operates beautifully, provides creation, schema exports, and deployment configuration
-import { CookieAccount, Filter, Domain, ScrapeLog } from './types';
+import { CredentialAccount, Filter, Domain, ScrapeLog } from './types';
 
 // Let's seed initial realistic expired domains data
 export const DEFAULT_DOMAINS: Domain[] = [
@@ -118,36 +118,45 @@ export const DEFAULT_DOMAINS: Domain[] = [
   }
 ];
 
-export const DEFAULT_COOKIES: CookieAccount[] = [
+export const DEFAULT_CREDENTIALS: CredentialAccount[] = [
   {
-    id: 'cook-1',
-    account_name: 'Primary Scrape Node Alpha',
-    cookie_json: '[{"name":"xf_session","value":"8b3f29da57ac4598d123b3f88dd233ef"}]',
+    id: 'cred-1',
+    account_name: 'Primary Node (Alpha)',
+    email: 'domains.dev.node1@gmail.com',
+    password: 'SecureNodePassword2026!',
+    session_cookies_json: '[{"name":"xf_session","value":"8b3f29da57ac4598d123b3f88dd233ef", "domain": ".expireddomains.net"}]',
     status: 'active',
     is_primary: true,
+    last_login: '2026-06-05T19:00:00Z',
     last_success: '2026-06-05T19:30:00Z',
     last_failure: null,
     created_at: '2026-06-01T00:00:00Z',
     updated_at: '2026-06-05T19:30:00Z'
   },
   {
-    id: 'cook-2',
-    account_name: 'Backup Node Beta',
-    cookie_json: '[{"name":"xf_session","value":"fffa88112e4deeefaa88383ff9288ee1"}]',
+    id: 'cred-2',
+    account_name: 'Backup High-Volume Node (Beta)',
+    email: 'backupscraper2@outlook.com',
+    password: 'BypassDetectionNet99!',
+    session_cookies_json: '[{"name":"xf_session","value":"fffa88112e4deeefaa88383ff9288ee1", "domain": ".expireddomains.net"}]',
     status: 'active',
     is_primary: false,
+    last_login: '2026-06-05T18:00:00Z',
     last_success: '2026-06-05T19:15:00Z',
     last_failure: '2026-06-05T19:20:00Z',
     created_at: '2026-06-02T00:00:00Z',
     updated_at: '2026-06-05T19:20:00Z'
   },
   {
-    id: 'cook-3',
-    account_name: 'Legacy Node Gamma (Expired)',
-    cookie_json: '[{"name":"xf_session","value":"123000badcookiesessionvalues"}]',
+    id: 'cred-3',
+    account_name: 'Sandbox Node (Gamma)',
+    email: 'tester.dom.crawler@yahoo.com',
+    password: 'SimpleCrawlerA123!',
+    session_cookies_json: '', // Empty - triggers automatic login on first execution!
     status: 'expired',
     is_primary: false,
-    last_success: '2026-06-04T12:00:00Z',
+    last_login: null,
+    last_success: null,
     last_failure: '2026-06-05T10:00:00Z',
     created_at: '2026-06-03T00:00:00Z',
     updated_at: '2026-06-05T10:00:00Z'
@@ -274,7 +283,7 @@ export function writeStoredData<T>(key: string, data: T): void {
 
 export function initializeDatabase() {
   getStoredData('domains', DEFAULT_DOMAINS);
-  getStoredData('cookies', DEFAULT_COOKIES);
+  getStoredData('credentials', DEFAULT_CREDENTIALS);
   getStoredData('filters', DEFAULT_FILTERS);
   getStoredData('logs', DEFAULT_LOGS);
   getStoredData('settings', DEFAULT_SETTINGS);

@@ -31,24 +31,27 @@ CREATE POLICY "Allow admin to view all profiles"
     )
   );
 
--- 2. Cookie Accounts
-CREATE TABLE IF NOT EXISTS cookie_accounts (
+-- 2. Credential Accounts (Rotator Cluster with Automated SeleniumBase Browser Session Persistence)
+CREATE TABLE IF NOT EXISTS credential_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   account_name TEXT NOT NULL,
-  cookie_json TEXT NOT NULL, -- Encrypted Session string
+  email TEXT NOT NULL,
+  password TEXT NOT NULL,
+  session_cookies_json TEXT DEFAULT '[]', -- JSON serialization of selenium cookies
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'expired', 'failed', 'disabled')),
   is_primary BOOLEAN DEFAULT false,
+  last_login TIMESTAMP WITH TIME ZONE,
   last_success TIMESTAMP WITH TIME ZONE,
   last_failure TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE cookie_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credential_accounts ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can manage their own cookies"
-  ON cookie_accounts FOR ALL
+CREATE POLICY "Users can manage their own credential accounts"
+  ON credential_accounts FOR ALL
   TO authenticated
   USING (user_id = auth.uid());
 
@@ -119,7 +122,7 @@ CREATE TABLE IF NOT EXISTS scrape_logs (
   timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error', 'success')),
   message TEXT NOT NULL,
-  cookie_account_id UUID REFERENCES cookie_accounts(id) ON DELETE SET NULL
+  credential_account_id UUID REFERENCES credential_accounts(id) ON DELETE SET NULL
 );
 
 ALTER TABLE scrape_logs ENABLE ROW LEVEL SECURITY;
@@ -130,11 +133,11 @@ CREATE POLICY "All authenticated users can read scrape telemetry logs"
   USING (true);
 
 -- Automated Primary Reset Triggers --
-CREATE OR REPLACE FUNCTION handle_primary_cookie_rotation()
+CREATE OR REPLACE FUNCTION handle_primary_credential_rotation()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.is_primary = true THEN
-    UPDATE cookie_accounts
+    UPDATE credential_accounts
     SET is_primary = false, updated_at = NOW()
     WHERE user_id = NEW.user_id AND id <> NEW.id;
   END IF;
@@ -142,7 +145,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE TRIGGER tr_rotate_primary_cookie
-  BEFORE INSERT OR UPDATE OF is_primary ON cookie_accounts
+CREATE OR REPLACE TRIGGER tr_rotate_primary_credential
+  BEFORE INSERT OR UPDATE OF is_primary ON credential_accounts
   FOR EACH ROW
-  EXECUTE FUNCTION handle_primary_cookie_rotation();
+  EXECUTE FUNCTION handle_primary_credential_rotation();
