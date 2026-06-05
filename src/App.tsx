@@ -45,7 +45,16 @@ import {
   Bar,
   Cell
 } from 'recharts';
-import { getStoredData, writeStoredData, initializeDatabase } from './mockDb';
+import { 
+  getStoredData, 
+  writeStoredData, 
+  initializeDatabase,
+  DEFAULT_DOMAINS,
+  DEFAULT_COOKIES,
+  DEFAULT_FILTERS,
+  DEFAULT_LOGS,
+  DEFAULT_SETTINGS
+} from './mockDb';
 import { CookieAccount, Filter, Domain, ScrapeLog } from './types';
 
 export default function App() {
@@ -56,10 +65,21 @@ export default function App() {
 
   // State
   const [activeTab, setActiveTab] = useState<'overview' | 'domains' | 'filters' | 'cookies' | 'logs' | 'settings'>('overview');
-  const [domains, setDomains] = useState<Domain[]>(() => getStoredData('domains', []));
-  const [cookies, setCookies] = useState<CookieAccount[]>(() => getStoredData('cookies', []));
-  const [filters, setFilters] = useState<Filter[]>(() => getStoredData('filters', []));
-  const [logs, setLogs] = useState<ScrapeLog[]>(() => getStoredData('logs', []));
+  const [domains, setDomains] = useState<Domain[]>(() => getStoredData('domains', DEFAULT_DOMAINS));
+  const [cookies, setCookies] = useState<CookieAccount[]>(() => getStoredData('cookies', DEFAULT_COOKIES));
+  const [filters, setFilters] = useState<Filter[]>(() => getStoredData('filters', DEFAULT_FILTERS));
+  const [logs, setLogs] = useState<ScrapeLog[]>(() => getStoredData('logs', DEFAULT_LOGS));
+  
+  // Platform configuration state
+  const [settings, setSettings] = useState(() => getStoredData('settings', DEFAULT_SETTINGS));
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'failed'>('idle');
+
+  // Sync settings when state changes
+  useEffect(() => {
+    writeStoredData('settings', settings);
+  }, [settings]);
   
   // Filters and queries
   const [searchTerm, setSearchTerm] = useState('');
@@ -303,6 +323,45 @@ export default function App() {
         }, 1200);
       }, 1000);
     }, 1000);
+  };
+
+  // Settings Action Handlers
+  const handleSaveSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaveSuccess(true);
+    addLog('success', 'Flushed config cache. ExpiredDomains SaaS Engine re-initialized with new parameters.');
+    setTimeout(() => {
+      setSaveSuccess(false);
+    }, 4000);
+  };
+
+  const handleTestDatabase = () => {
+    setIsTestingConnection(true);
+    setConnectionStatus('idle');
+    addLog('info', `Testing live connections for active nodes at endpoint: ${settings.supabase_url}...`);
+    
+    setTimeout(() => {
+      setIsTestingConnection(false);
+      if (settings.supabase_url && settings.supabase_url.startsWith('http') && settings.supabase_url.includes('supabase.co')) {
+        setConnectionStatus('success');
+        addLog('success', 'Handshake verified! Successfully established secure session pool tunnels on Supabase PostgreSQL.');
+      } else {
+        setConnectionStatus('failed');
+        addLog('error', 'Supabase handshake returned an error: DNS lookup fault or unauthorized ACL grants.');
+      }
+    }, 1500);
+  };
+
+  const generateNewCronSecret = () => {
+    const randomHex = Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+    const generated = `CRON_SEC_${randomHex}`;
+    setSettings({ ...settings, cron_secret: generated });
+    addLog('success', `Generated new SaaS Webhook signature: ${generated}. Make sure to update your external cron headers.`);
+  };
+
+  const resetSettingsToSeed = () => {
+    setSettings(DEFAULT_SETTINGS);
+    addLog('warning', 'Platform system configurations restored to default seed values.');
   };
 
   // Metrics calculating
@@ -1370,76 +1429,267 @@ export default function App() {
           {activeTab === 'settings' && (
             <div className="space-y-6">
               
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-gray-300" />
-                  <span>Platform System Configurations</span>
-                </h2>
-                <p className="text-xs text-gray-400">Synchronize backend dispatch triggers, webhooks, and automation environments</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Supabase Secrets */}
-                <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl space-y-4 text-left">
-                  <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm">
-                    <Database className="w-4.5 h-4.5" />
-                    <span>Supabase Live Environment</span>
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    Direct integration mapping schema. Ensure matching RLS policies are enabled on all user tables in the editor.
-                  </p>
-
-                  <div className="space-y-3.5 text-xs">
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Supabase Project URL</span>
-                      <input 
-                        type="text" 
-                        readOnly
-                        value="https://xegkscvnbajwks.supabase.co"
-                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-1.5 text-xs text-gray-400 select-all font-mono focus:outline-none w-full"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Service Role Crypt Key</span>
-                      <input 
-                        type="password" 
-                        readOnly
-                        value="••••••••••••••••••••••••••••••••••••••••"
-                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-1.5 text-xs text-gray-400 select-none font-mono focus:outline-none w-full"
-                      />
-                    </div>
-                  </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-gray-300" />
+                    <span>Platform System Configurations</span>
+                  </h2>
+                  <p className="text-xs text-gray-400">Synchronize backend database connections, dispatch triggers, webhook signatures, and Playwright crawler sandboxes.</p>
                 </div>
 
-                {/* Cron Triggers Configuration */}
-                <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl space-y-4 text-left">
-                  <div className="flex items-center gap-2 font-bold text-purple-400 text-sm">
-                    <Clock className="w-4.5 h-4.5" />
-                    <span>SaaS Daemon Crons Integrator</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={resetSettingsToSeed}
+                    className="bg-[#0f172a] border border-[#1e294b] hover:border-slate-600 text-gray-400 hover:text-white text-xs px-3.5 py-2 rounded-lg transition-all"
+                  >
+                    Restore Defaults
+                  </button>
+                </div>
+              </div>
+
+              {saveSuccess && (
+                <div className="bg-emerald-950/40 border border-emerald-500/30 p-4 rounded-xl flex items-center gap-3 text-emerald-300 text-xs animate-fade-in">
+                  <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <div>
+                    <span className="font-bold block text-emerald-200">Configurations Saved Successfully</span>
+                    <span>SaaS crawler task queues have been synchronized, and active scraper daemons are restarted.</span>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveSettings} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Supabase Secrets */}
+                  <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl space-y-4 text-left shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-bold text-emerald-400 text-sm">
+                        <Database className="w-4.5 h-4.5" />
+                        <span>Supabase Live Environment</span>
+                      </div>
+                      
+                      {connectionStatus === 'success' && (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded border border-emerald-800">Verified</span>
+                      )}
+                      {connectionStatus === 'failed' && (
+                        <span className="text-[10px] font-bold text-red-400 bg-red-900/30 px-2 py-0.5 rounded border border-red-800">Fault Warning</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 leading-normal">
+                      Connect to your live Supabase database instance to persist domain heartbeats, cookie proxy keys, and scraper logs globally.
+                    </p>
+
+                    <div className="space-y-3.5 text-xs">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Supabase Project URL</label>
+                        <input 
+                          type="url" 
+                          required
+                          value={settings.supabase_url}
+                          onChange={(e) => setSettings({ ...settings, supabase_url: e.target.value })}
+                          placeholder="https://your-project.supabase.co"
+                          className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full font-mono transition-colors"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Service Role Crypt Key (Encrypted Secret)</label>
+                        <input 
+                          type="password" 
+                          required
+                          value={settings.supabase_service_key}
+                          onChange={(e) => setSettings({ ...settings, supabase_service_key: e.target.value })}
+                          placeholder="service_role_secret_key"
+                          className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full font-mono transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Public Anon Key</label>
+                        <textarea 
+                          rows={2}
+                          value={settings.supabase_anon_key}
+                          onChange={(e) => setSettings({ ...settings, supabase_anon_key: e.target.value })}
+                          placeholder="public_anon_key_string"
+                          className="bg-[#0f172a] border border-[#1e294b] rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full font-mono break-all transition-colors"
+                        />
+                      </div>
+
+                      <div className="pt-2 border-t border-[#1e294b]/60 flex justify-between items-center">
+                        <span className="text-[10px] text-gray-500">Auto-validates on schema handshakes</span>
+                        <button
+                          type="button"
+                          disabled={isTestingConnection}
+                          onClick={handleTestDatabase}
+                          className="px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 border border-emerald-850 hover:border-emerald-700 text-emerald-400 rounded text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          {isTestingConnection ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Testing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5" />
+                              <span>Verify Connection</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cron Triggers Configuration */}
+                  <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl space-y-4 text-left shadow-lg flex flex-col justify-between">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 font-bold text-purple-400 text-sm">
+                        <Clock className="w-4.5 h-4.5" />
+                        <span>SaaS Daemon Webhooks & Crons</span>
+                      </div>
+                      <p className="text-xs text-gray-400 leading-normal">
+                        Configure webhook endpoints mapping. Use scheduled ping channels (e.g. cron-jobs.org) to ping your trigger path at recurring intervals.
+                      </p>
+
+                      <div className="space-y-3.5 text-xs">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Webhook Ingress URL</label>
+                          <input 
+                            type="url" 
+                            required
+                            value={settings.webhook_url}
+                            onChange={(e) => setSettings({ ...settings, webhook_url: e.target.value })}
+                            placeholder="https://your-cloudrun-url.com/api/dispatch-cron"
+                            className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full font-mono transition-colors"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Cron Authorization Header Code</label>
+                            <button
+                              type="button"
+                              onClick={generateNewCronSecret}
+                              className="text-[10px] text-purple-400 hover:underline font-bold"
+                            >
+                              Rotate Signature Key
+                            </button>
+                          </div>
+                          <input 
+                            type="text" 
+                            required
+                            value={settings.cron_secret}
+                            onChange={(e) => setSettings({ ...settings, cron_secret: e.target.value })}
+                            placeholder="CRON_SEC_XXXXXXXXXXXXXXXXXXXX"
+                            className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-purple-300 font-mono focus:outline-none focus:border-blue-500 w-full transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#1a1c3c] border border-[#312e81] p-3 rounded-lg text-[11px] text-gray-300 leading-normal mt-4">
+                      <div className="flex gap-2">
+                        <Lock className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>Security Mandate:</strong> Inbound scheduler requests must payload present the active authorization code header mapped above. Unauthenticated requests are discarded automatically.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Advanced Playwright & Cookie Rotator Custom Options */}
+                <div className="bg-[#0b1329] border border-[#1e294b] p-5 rounded-xl space-y-4 text-left shadow-lg">
+                  <div className="flex items-center gap-2 font-bold text-gray-300 text-sm">
+                    <Settings className="w-4.5 h-4.5 text-blue-500" />
+                    <span>Advanced Page Sandbox & Rotating Cookie Policies</span>
                   </div>
                   <p className="text-xs text-gray-400">
-                    Use scheduled heartbeat endpoints (e.g. cron-jobs.org) to ping your dispatch API every 5 minutes securely.
+                    Fine-tune Playwright automation variables, cookie swap structures, and scrape behaviors to protect session keys and bypass CAPTCHAs.
                   </p>
 
-                  <div className="space-y-3.5 text-xs">
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Webhook URL Input</span>
-                      <input 
-                        type="text" 
-                        readOnly
-                        value="https://your-applet-url.run.app/api/dispatch-cron"
-                        className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-1.5 text-xs text-gray-400 select-all font-mono focus:outline-none w-full"
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs pt-2">
                     
-                    <div className="bg-[#1e1b4b] border border-[#312e81] p-3 rounded-lg text-[11px] text-gray-300 leading-normal">
-                      <strong>Security Mandate:</strong> Pings from cron-jobs.org should contain a secret Authorization header code mapped in your environment secrets to prevent DDoS triggers.
+                    <div className="space-y-1.5 bg-[#0f172a] p-3 rounded-lg border border-[#1e294b]">
+                      <label className="text-[11px] text-gray-400 block font-bold">Page Concurrency Limit</label>
+                      <div className="flex items-center justify-between gap-3">
+                        <input 
+                          type="range" 
+                          min="1" 
+                          max="5"
+                          value={settings.concurrency_limit || 1}
+                          onChange={(e) => setSettings({ ...settings, concurrency_limit: parseInt(e.target.value) || 1 })}
+                          className="w-full text-blue-600 bg-gray-901 accent-blue-500 h-1.5 rounded-lg cursor-pointer"
+                        />
+                        <span className="font-mono font-bold bg-[#1e294b] px-2 py-0.5 rounded text-white min-w-[24px] text-center">
+                          {settings.concurrency_limit || 1}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-gray-500 block">Parallel headless browser instances</span>
                     </div>
+
+                    <div className="space-y-1.5 bg-[#0f172a] p-3 rounded-lg border border-[#1e294b]">
+                      <label className="text-[11px] text-gray-400 block font-bold">User-Agent Spoofer</label>
+                      <select 
+                        value={settings.user_agent_mode}
+                        onChange={(e) => setSettings({ ...settings, user_agent_mode: e.target.value })}
+                        className="bg-[#0b1329] border border-[#1e294b] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 w-full"
+                      >
+                        <option value="Desktop Chrome (Macintosh OS X 10_15_7)">Desktop Chrome (macOS)</option>
+                        <option value="Desktop Firefox (Windows NT 10.0)">Desktop Firefox (Win/NT)</option>
+                        <option value="Mobile Safari iPhone 15 Pro">Mobile Safari (iPhone 15)</option>
+                        <option value="Baidu/GoogleBot Enterprise Spoof">Googlebot / SearchCrawler</option>
+                      </select>
+                      <span className="text-[9px] text-gray-500 block">Identity string sent on HTTP headers</span>
+                    </div>
+
+                    <div className="space-y-1.5 bg-[#0f172a] p-3 rounded-lg border border-[#1e294b]">
+                      <label className="text-[11px] text-gray-400 block font-bold">Human Delay Offset (ms)</label>
+                      <input 
+                        type="number" 
+                        min="500"
+                        max="10000"
+                        step="100"
+                        value={settings.request_delay_ms || 1000}
+                        onChange={(e) => setSettings({ ...settings, request_delay_ms: parseInt(e.target.value) || 500 })}
+                        className="bg-[#0b1329] border border-[#1e294b] rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full font-mono"
+                      />
+                      <span className="text-[9px] text-gray-500 block">Stagger navigation queries to avoid bans</span>
+                    </div>
+
+                    <div className="space-y-1.5 bg-[#0f172a] p-3 rounded-lg border border-[#1e294b]">
+                      <label className="text-[11px] text-gray-400 block font-bold">Cookie Rotate Decision Matrix</label>
+                      <select 
+                        value={settings.rotation_policy}
+                        onChange={(e) => setSettings({ ...settings, rotation_policy: e.target.value as any })}
+                        className="bg-[#0b1329] border border-[#1e294b] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 w-full"
+                      >
+                        <option value="error_fallback">Failover: Swap on HTTP Error</option>
+                        <option value="round_robin">Round-Robin: Shift after each filter query</option>
+                        <option value="manual_only">Manual Selection only</option>
+                      </select>
+                      <span className="text-[9px] text-gray-500 block">System behavior when access nodes fail</span>
+                    </div>
+
                   </div>
                 </div>
 
-              </div>
+                {/* Final Submit Block */}
+                <div className="p-4 bg-[#0d162f] border border-[#1e294b] rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <div className="w-2 h-2 rounded-full bg-blue-550 animate-ping" />
+                    <span>Real-time adjustments are hot-swapped into memory instantly.</span>
+                  </div>
+                  
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg hover:shadow-blue-900/30 transition-all active:scale-95"
+                  >
+                    Save System Configurations
+                  </button>
+                </div>
+              </form>
 
             </div>
           )}

@@ -3,7 +3,7 @@
 import { CookieAccount, Filter, Domain, ScrapeLog } from './types';
 
 // Let's seed initial realistic expired domains data
-const DEFAULT_DOMAINS: Domain[] = [
+export const DEFAULT_DOMAINS: Domain[] = [
   {
     id: 'dom-1',
     domain_name: 'cyberdefensehub.com',
@@ -118,7 +118,7 @@ const DEFAULT_DOMAINS: Domain[] = [
   }
 ];
 
-const DEFAULT_COOKIES: CookieAccount[] = [
+export const DEFAULT_COOKIES: CookieAccount[] = [
   {
     id: 'cook-1',
     account_name: 'Primary Scrape Node Alpha',
@@ -154,7 +154,7 @@ const DEFAULT_COOKIES: CookieAccount[] = [
   }
 ];
 
-const DEFAULT_FILTERS: Filter[] = [
+export const DEFAULT_FILTERS: Filter[] = [
   {
     id: 'filt-1',
     name: 'High Authority Coms',
@@ -196,7 +196,7 @@ const DEFAULT_FILTERS: Filter[] = [
   }
 ];
 
-const DEFAULT_LOGS: ScrapeLog[] = [
+export const DEFAULT_LOGS: ScrapeLog[] = [
   {
     id: 'log-1',
     timestamp: '2026-06-05T19:00:00Z',
@@ -247,6 +247,18 @@ const DEFAULT_LOGS: ScrapeLog[] = [
   }
 ];
 
+export const DEFAULT_SETTINGS = {
+  supabase_url: 'https://xegkscvnbajwks.supabase.co',
+  supabase_anon_key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlZ2tzY3ZuYmFqd2tzIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODMyNDAwMDB9.some-mock-payload-signature-key-goes-here-since-this-is-simulated-client-env',
+  supabase_service_key: 'service_role_secret_aes256_crypt_handshake_hash_token_unlocked',
+  webhook_url: 'https://ais-dev-ks4poswzbgdgl5hjbqncgh-667628834966.asia-southeast1.run.app/api/dispatch-cron',
+  cron_secret: 'CRON_SEC_F2CEF469_CD21_4EB2_8C41_8731BE2D7A5C',
+  concurrency_limit: 3,
+  user_agent_mode: 'Desktop Chrome (Macintosh OS X 10_15_7)',
+  request_delay_ms: 1500,
+  rotation_policy: 'error_fallback'
+};
+
 export function getStoredData<T>(key: string, initial: T): T {
   const data = localStorage.getItem(`expireddomains_${key}`);
   if (!data) {
@@ -265,4 +277,5 @@ export function initializeDatabase() {
   getStoredData('cookies', DEFAULT_COOKIES);
   getStoredData('filters', DEFAULT_FILTERS);
   getStoredData('logs', DEFAULT_LOGS);
+  getStoredData('settings', DEFAULT_SETTINGS);
 }
