@@ -377,7 +377,7 @@ export default function App() {
           ];
 
           setDomains(prev => [...newGenerated, ...prev]);
-          addLog('success', `Scraper discovered 1 new high authority domain. Database synchronized.`);
+          addLog('success', `Scraper discovered 1 new high authority domain (Capped of max ${settings.max_domains_per_run || 50} domains). Database synchronized.`);
           setIsScraping(false);
           setScrapeProgress('');
         }, 1200);
@@ -1852,6 +1852,20 @@ export default function App() {
                         <option value="manual_only">Manual Selection only</option>
                       </select>
                       <span className="text-[9px] text-gray-500 block">System behavior when access nodes fail</span>
+                    </div>
+
+                    <div className="space-y-1.5 bg-[#0f172a] p-3 rounded-lg border border-[#1e294b]">
+                      <label className="text-[11px] text-gray-400 block font-bold">Max Domain Scrape Limit (per run)</label>
+                      <input 
+                        type="number" 
+                        min="10"
+                        max="1000"
+                        step="10"
+                        value={settings.max_domains_per_run || 50}
+                        onChange={(e) => setSettings({ ...settings, max_domains_per_run: parseInt(e.target.value) || 50 })}
+                        className="bg-[#0b1329] border border-[#1e294b] rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full font-mono"
+                      />
+                      <span className="text-[9px] text-gray-500 block">Cap extracted records to prevent database bloat</span>
                     </div>
 
                   </div>

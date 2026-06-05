@@ -265,7 +265,8 @@ export const DEFAULT_SETTINGS = {
   concurrency_limit: 3,
   user_agent_mode: 'Desktop Chrome (Macintosh OS X 10_15_7)',
   request_delay_ms: 1500,
-  rotation_policy: 'error_fallback'
+  rotation_policy: 'error_fallback',
+  max_domains_per_run: 50
 };
 
 export function getStoredData<T>(key: string, initial: T): T {
