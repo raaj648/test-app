@@ -1,7 +1,7 @@
 export interface CredentialAccount {
   id: string;
   account_name: string;
-  email: string;
+  username: string;
   password: string;
   session_cookies_json: string; // Stores the cached SeleniumBase browser cookies to reuse
   status: 'active' | 'expired' | 'failed' | 'disabled';

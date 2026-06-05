@@ -36,13 +36,13 @@ class ExpiredDomainsSeleniumBaseScraper:
         logger.info("Initializing SeleniumBase UC (Undetectable Mode) cluster...")
 
     def fetch_primary_credentials(self) -> Dict[str, Any]:
-        """Loads registered crawler credentials (email, password, cached cookies) from database."""
+        """Loads registered crawler credentials (username, password, cached cookies) from database."""
         logger.info("Connecting to Supabase table `credential_accounts` to retrieve primary login nodes...")
         # Simulating secure credentials matching the client database
         return {
             "id": "cred-1",
             "account_name": "Primary Node (Alpha)",
-            "email": "domains.dev.node1@gmail.com",
+            "username": "expd_crawler_alpha",
             "password": "SecureNodePassword2026!",
             "session_cookies_json": '[{"name":"xf_session","value":"8b3f29da57ac4598d123b3f88dd233ef", "domain": ".expireddomains.net"}]',
             "status": "active",
@@ -71,11 +71,11 @@ class ExpiredDomainsSeleniumBaseScraper:
             self.post_log("error", "No active credentials available for authentication. Exiting.")
             return
 
-        email = cred["email"]
+        username = cred["username"]
         password = cred["password"]
         cached_cookies_json = cred["session_cookies_json"]
         
-        logger.info(f"Targeting Account: {cred['account_name']} (User: {email})")
+        logger.info(f"Targeting Account: {cred['account_name']} (User: {username})")
         self.post_log("info", f"Bkey matching: {cred['account_name']}. Scanning with Undetectable Chromium instance...")
 
         # Emulating SeleniumBase UC Mode Context Manager execution
@@ -116,7 +116,7 @@ class ExpiredDomainsSeleniumBaseScraper:
                         sb.uc_open_with_reconnect("https://www.expireddomains.net/login/", reconnect_time=4)
                         
                         # Type credentials safely using anti-bot slow keypresses
-                        sb.type("#input_username", email)
+                        sb.type("#input_username", username)
                         sb.type("#input_password", password)
                         
                         # Click log in with human click emulation
@@ -167,7 +167,7 @@ class ExpiredDomainsSeleniumBaseScraper:
                 logger.info("SeleniumBase connecting to target: /login/")
                 self.post_log("info", "Executing login action using SeleniumBase --uc mode to bypass anti-bot protection.")
                 time.sleep(1.5)
-                logger.info(f"Typing inputs -> user: {email}, status: success.")
+                logger.info(f"Typing inputs -> user: {username}, status: success.")
                 self.post_log("success", "Logged into ExpiredDomains.net. Secure cookies fetched and updated back in DB.")
                 
             time.sleep(1.0)

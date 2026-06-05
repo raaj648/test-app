@@ -122,7 +122,7 @@ export const DEFAULT_CREDENTIALS: CredentialAccount[] = [
   {
     id: 'cred-1',
     account_name: 'Primary Node (Alpha)',
-    email: 'domains.dev.node1@gmail.com',
+    username: 'expd_crawler_alpha',
     password: 'SecureNodePassword2026!',
     session_cookies_json: '[{"name":"xf_session","value":"8b3f29da57ac4598d123b3f88dd233ef", "domain": ".expireddomains.net"}]',
     status: 'active',
@@ -136,7 +136,7 @@ export const DEFAULT_CREDENTIALS: CredentialAccount[] = [
   {
     id: 'cred-2',
     account_name: 'Backup High-Volume Node (Beta)',
-    email: 'backupscraper2@outlook.com',
+    username: 'expd_scraper_beta',
     password: 'BypassDetectionNet99!',
     session_cookies_json: '[{"name":"xf_session","value":"fffa88112e4deeefaa88383ff9288ee1", "domain": ".expireddomains.net"}]',
     status: 'active',
@@ -150,7 +150,7 @@ export const DEFAULT_CREDENTIALS: CredentialAccount[] = [
   {
     id: 'cred-3',
     account_name: 'Sandbox Node (Gamma)',
-    email: 'tester.dom.crawler@yahoo.com',
+    username: 'sandbox_crawler_gam',
     password: 'SimpleCrawlerA123!',
     session_cookies_json: '', // Empty - triggers automatic login on first execution!
     status: 'expired',

@@ -99,7 +99,7 @@ export default function App() {
   const [isAddingCredential, setIsAddingCredential] = useState(false);
   const [newCredential, setNewCredential] = useState({
     account_name: '',
-    email: '',
+    username: '',
     password: '',
     session_cookies_json: '',
     is_primary: false,
@@ -144,7 +144,7 @@ export default function App() {
   // Handle Credential and Active Session action events
   const handleCreateCredential = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCredential.account_name || !newCredential.email || !newCredential.password) return;
+    if (!newCredential.account_name || !newCredential.username || !newCredential.password) return;
 
     let finalCreds = [...credentials];
     if (newCredential.is_primary) {
@@ -154,7 +154,7 @@ export default function App() {
     const created: CredentialAccount = {
       id: `cred-${Date.now()}`,
       account_name: newCredential.account_name,
-      email: newCredential.email,
+      username: newCredential.username,
       password: newCredential.password,
       session_cookies_json: newCredential.session_cookies_json || '[]',
       status: newCredential.status,
@@ -168,10 +168,10 @@ export default function App() {
 
     setCredentials([created, ...finalCreds]);
     setIsAddingCredential(false);
-    setNewCredential({ account_name: '', email: '', password: '', session_cookies_json: '', is_primary: false, status: 'active' });
+    setNewCredential({ account_name: '', username: '', password: '', session_cookies_json: '', is_primary: false, status: 'active' });
 
     // Append to logs
-    addLog('success', `Added account credentials: ${created.account_name} (${created.email}). Ready for automated SeleniumBase login.`);
+    addLog('success', `Added account credentials: ${created.account_name} (${created.username}). Ready for automated SeleniumBase login.`);
   };
 
   const toggleCredentialActive = (id: string) => {
@@ -217,7 +217,7 @@ export default function App() {
               updated_at: new Date().toISOString() 
             };
           } else {
-            // Redirected / Logged out detection triggers automatic login using email/password
+            // Redirected / Logged out detection triggers automatic login using username/password
             addLog('warning', `Session cookies invalid or missing. Triggering SeleniumBase automatic relogin handler using credentials...`);
             
             // Simulating SeleniumBase auto-login delay
@@ -227,7 +227,7 @@ export default function App() {
               ]);
               setCredentials(prevCreds => prevCreds.map(item => {
                 if (item.id === id) {
-                  addLog('success', `Successfully authenticated via email/password. Saved fresh browser session cookies list back to DB.`);
+                  addLog('success', `Successfully authenticated via username/password. Saved fresh browser session cookies list back to DB.`);
                   return {
                     ...item,
                     status: 'active',
@@ -324,15 +324,15 @@ export default function App() {
 
       if (hasSession) {
         setScrapeProgress(`Restoring session for: ${targetCred.account_name}`);
-        addLog('info', `SeleniumBase successfully restored cached browser session for [${targetCred.email}]. Bypassed login form.`);
+        addLog('info', `SeleniumBase successfully restored cached browser session for [${targetCred.username}]. Bypassed login form.`);
       } else {
-        setScrapeProgress(`Auto-logging into ExpiredDomains: ${targetCred.email}`);
-        addLog('warning', `No active browser session detected for [${targetCred.email}]. Booting Undetectable UC browser & submitting form...`);
+        setScrapeProgress(`Auto-logging into ExpiredDomains: ${targetCred.username}`);
+        addLog('warning', `No active browser session detected for [${targetCred.username}]. Booting Undetectable UC browser & submitting form...`);
       }
 
       setTimeout(() => {
         if (!hasSession) {
-          addLog('success', `SeleniumBase auto-login successful. Saved fresh browser cookies state back to DB for: ${targetCred.email}`);
+          addLog('success', `SeleniumBase auto-login successful. Saved fresh browser cookies state back to DB for: ${targetCred.username}`);
           // Update credentials with mock cookies for subsequent runs
           setCredentials(prev => prev.map(c => {
             if (c.id === targetCred.id) {
@@ -1284,13 +1284,13 @@ export default function App() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Login Email Address</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">ExpiredDomains Username</label>
                       <input 
                         required
-                        type="email"
-                        placeholder="e.g. user@expireddomains.net"
-                        value={newCredential.email}
-                        onChange={(e) => setNewCredential({ ...newCredential, email: e.target.value })}
+                        type="text"
+                        placeholder="e.g. exp_hunter_88"
+                        value={newCredential.username}
+                        onChange={(e) => setNewCredential({ ...newCredential, username: e.target.value })}
                         className="bg-[#0f172a] border border-[#1e294b] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 w-full transition-colors"
                       />
                     </div>
@@ -1395,8 +1395,8 @@ export default function App() {
                         {/* Connection Details Block */}
                         <div className="bg-[#0e162d] border border-[#1e294b]/60 rounded-xl p-3.5 mt-3 space-y-2">
                           <div className="flex justify-between items-center text-xs">
-                            <span className="text-gray-400 font-medium">Mapped User</span>
-                            <span className="font-mono text-gray-100 font-bold">{cred.email}</span>
+                            <span className="text-gray-400 font-medium">Username</span>
+                            <span className="font-mono text-gray-100 font-bold">{cred.username}</span>
                           </div>
                           
                           <div className="flex justify-between items-center text-xs">

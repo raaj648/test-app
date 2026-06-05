@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS credential_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   account_name TEXT NOT NULL,
-  email TEXT NOT NULL,
+  username TEXT NOT NULL,
   password TEXT NOT NULL,
   session_cookies_json TEXT DEFAULT '[]', -- JSON serialization of selenium cookies
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'expired', 'failed', 'disabled')),
