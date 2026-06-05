@@ -82,8 +82,8 @@ class ExpiredDomainsSeleniumBaseScraper:
         # Emulating SeleniumBase UC Mode Context Manager execution
         if SELENIUMBASE_AVAILABLE:
             try:
-                # Launch custom Chromium sandboxed under SeleniumBase UC (Undetectable Mode) to bypass Cloudflare
-                with SB(uc=True, headless=True, browser="chrome") as sb:
+                # Launch custom Chromium sandboxed under SeleniumBase UC (Undetectable Mode) to bypass Cloudflare in headed mode
+                with SB(uc=True, headless=False, browser="chrome") as sb:
                     # 1. Warm-up navigation using Undetectable Mode connection
                     sb.uc_open_with_reconnect("https://www.expireddomains.net/", reconnect_time=4)
                     
