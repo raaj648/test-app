@@ -1,0 +1,8 @@
+{
+  "name": "Remix: ExpiredDomains Automation Platform",
+  "description": "Enterprise-grade orchestrator dashboard, filter manager, cookie rotatory backend, and deployment center for ExpiredDomains.net.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
