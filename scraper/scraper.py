@@ -38,21 +38,69 @@ class ExpiredDomainsSeleniumBaseScraper:
     def fetch_primary_credentials(self) -> Dict[str, Any]:
         """Loads registered crawler credentials from database (matching current client account)."""
         logger.info("Connecting to Supabase table `credential_accounts` to retrieve primary login nodes...")
+        
+        # 1. Attempt to fetch credentials dynamically from your Supabase setup
+        if self.supabase_url and "supabase.co" in self.supabase_url and self.supabase_key and self.supabase_key != "service_role_secret":
+            try:
+                from supabase import create_client
+                supabase_client = create_client(self.supabase_url, self.supabase_key)
+                
+                # Fetch active accounts
+                response = supabase_client.table("credential_accounts").select("*").eq("status", "active").execute()
+                
+                if response and hasattr(response, 'data') and response.data:
+                    data = response.data
+                    logger.info(f"Loaded {len(data)} active credential profiles from Supabase database.")
+                    # Prioritize primary node
+                    primary = next((x for x in data if x.get("is_primary")), None)
+                    cred = primary if primary else data[0]
+                    logger.info(f"Retrieved live node configuration for client username: {cred.get('username')}")
+                    return cred
+                else:
+                    logger.warning("Supabase connection succeeded but no records found in table `credential_accounts`.")
+            except Exception as supabase_err:
+                logger.warning(f"Failed to fetch live database credential records: {supabase_err}")
+                logger.warning("Supabase database might be unseeded or connection restricted. Proceeding with developer fallback options...")
+        else:
+            logger.info("Supabase credentials not configured in environment variables or service role holds placeholders.")
+
+        # 2. Strong fallback directly to verified account credentials configuration
+        logger.info("Activating developer override credentials block for member node login sequence.")
         return {
             "id": "cred-1",
             "account_name": "Primary Node (Alpha)",
-            "username": "expd_crawler_alpha",
-            "password": "SecureNodePassword2026!",
-            "session_cookies_json": '[{"name":"xf_session","value":"8b3f29da57ac4598d123b3f88dd233ef", "domain": ".expireddomains.net"}]',
+            "username": "khan648",
+            "password": "AR@@@@ri000648",
+            "session_cookies_json": None, # Force direct login to generate/freshen session cache keys
             "status": "active",
             "is_primary": True,
-            "last_login": "2026-06-05T19:00:00Z"
+            "last_login": None
         }
 
     def update_cached_session(self, credential_id: str, new_cookies_json: str, status: str = "active"):
         """Saves current browser cookies back to Supabase to bypass re-login overhead next run."""
         logger.info(f"Uploading refreshed session token cookies list for credential node [{credential_id}]...")
-        logger.info(f"SESSION CACHE PERSISTED: Saved cookies length: {len(new_cookies_json)} characters.")
+        self.post_log("info", "Persisting authenticated session cookie tokens to browser profile records.")
+        
+        if self.supabase_url and "supabase.co" in self.supabase_url and self.supabase_key and self.supabase_key != "service_role_secret":
+            try:
+                from supabase import create_client
+                supabase_client = create_client(self.supabase_url, self.supabase_key)
+                
+                # Write cached authentication tokens (cookies json) to avoid login challenge limits
+                supabase_client.table("credential_accounts").update({
+                    "session_cookies_json": new_cookies_json,
+                    "last_login": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                    "status": status
+                }).eq("id", credential_id).execute()
+                
+                logger.info("Successfully synchronized active cookies back to Supabase table `credential_accounts`!")
+                self.post_log("success", "Synchronized cookie cache back to online storage database.")
+            except Exception as db_err:
+                logger.error(f"Failed to synchronize cache back to Supabase: {db_err}")
+                self.post_log("warning", "Database connection bypassed. Cookies preserved solely on current runner node session context.")
+        else:
+            logger.info("Offline simulation: Refresh cookies received but database sync is bypassed.")
 
     def post_log(self, level: str, message: str, credential_id: str = None):
         """Streams diagnostic telemetry logs to the database console tab."""

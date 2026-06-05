@@ -122,9 +122,9 @@ export const DEFAULT_CREDENTIALS: CredentialAccount[] = [
   {
     id: 'cred-1',
     account_name: 'Primary Node (Alpha)',
-    username: 'expd_crawler_alpha',
-    password: 'SecureNodePassword2026!',
-    session_cookies_json: '[{"name":"xf_session","value":"8b3f29da57ac4598d123b3f88dd233ef", "domain": ".expireddomains.net"}]',
+    username: 'khan648',
+    password: 'AR@@@@ri000648',
+    session_cookies_json: '',
     status: 'active',
     is_primary: true,
     last_login: '2026-06-05T19:00:00Z',
